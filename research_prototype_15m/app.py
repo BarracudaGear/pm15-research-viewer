@@ -27,11 +27,34 @@ from utils import (
     seconds_remaining_in_window,
 )
 
-st.set_page_config(page_title="Kalshi 15-Min Research", page_icon="📊", layout="wide")
+st.set_page_config(page_title="Kalshi 15-Min Research", page_icon="\ud83d\udcca", layout="wide")
 
-# ---------------------------------------------------------------------------
-# Sidebar
-# ---------------------------------------------------------------------------
+
+def _gate() -> bool:
+    """Fail closed. No dashboard until APP_PASSWORD matches."""
+    if st.session_state.get("authed"):
+        return True
+    try:
+        expected = st.secrets["APP_PASSWORD"]
+    except Exception:
+        expected = None
+    st.title("15-Min Research")
+    st.caption("Private viewer.")
+    if not expected:
+        st.error("APP_PASSWORD is not set in Streamlit secrets. Add it under App settings → Secrets.")
+        return False
+    pwd = st.text_input("Password", type="password")
+    if pwd == str(expected):
+        st.session_state.authed = True
+        st.rerun()
+    if pwd:
+        st.error("Wrong password")
+    return False
+
+
+if not _gate():
+    st.stop()
+
 st.sidebar.title("15-Min Research")
 st.sidebar.caption("Read-only · Brain B1 · No keys · No paper")
 
@@ -56,14 +79,11 @@ auto = st.sidebar.checkbox("Auto-refresh (while tab open)", value=True)
 if st.sidebar.button("Refresh now"):
     st.rerun()
 
-# ---------------------------------------------------------------------------
-# Fetch
-# ---------------------------------------------------------------------------
 now = datetime.now(timezone.utc)
 secs_left = seconds_remaining_in_window(now)
 mins_left = minutes_remaining_in_window(now)
 
-with st.spinner("Fetching 15-minute ticket and spot…"):
+with st.spinner("Fetching 15-minute ticket and spot\u2026"):
     market = fetch_15m_market(asset, which)
     spot = fetch_spot(asset)
     recent_closes = fetch_recent_closes(asset, granularity=60, limit=30)
@@ -89,7 +109,6 @@ direction = predict_direction(
     minutes_remaining=mins_left if which == "current" else 15.0,
 )
 
-# Hidden Phase 2R — computed, not applied
 _ = experimental_adjustments(direction.p_up, enabled=False)
 
 gate = evaluate_gates(
@@ -109,15 +128,11 @@ gate = evaluate_gates(
 fee_yes = taker_fee(yes_ask if yes_ask > 0 else 0.5)
 need_yes = (yes_ask + fee_yes + 0.01) if yes_ask > 0 else None
 
-# Statistical band around strike (or spot if no strike)
 anchor = strike if strike else spot
 half = (safety.magnitude_pct + safety.uncertainty_pct) / 100.0 * anchor if anchor else 0.0
 stat_floor = anchor - half if anchor else None
 stat_ceil = anchor + half if anchor else None
 
-# ---------------------------------------------------------------------------
-# Header
-# ---------------------------------------------------------------------------
 book_tag = "Book A" if is_book_a(asset) else "Book B (quotes only)"
 st.title(f"{asset} · 15-Minute Up/Down")
 st.caption(
@@ -130,19 +145,16 @@ st.markdown(
 )
 
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("Spot (public proxy)", format_price(spot) if spot else "—")
-c2.metric("Price-to-beat", format_price(strike) if strike else "—")
-c3.metric("Kalshi mid", f"{mid:.3f}" if market else "—")
-c4.metric("Yes bid / ask", f"{yes_bid:.2f} / {yes_ask:.2f}" if market else "—")
+c1.metric("Spot (public proxy)", format_price(spot) if spot else "\u2014")
+c2.metric("Price-to-beat", format_price(strike) if strike else "\u2014")
+c3.metric("Kalshi mid", f"{mid:.3f}" if market else "\u2014")
+c4.metric("Yes bid / ask", f"{yes_bid:.2f} / {yes_ask:.2f}" if market else "\u2014")
 
 if asset in COMMODITY_ASSETS and spot == 0.0:
     st.info("No public spot proxy for this metal/oil name. Using Kalshi tape only.")
 if market is None:
     st.warning("No open 15-minute ticket found for this asset/window (or API throttled).")
 
-# ---------------------------------------------------------------------------
-# Safety + Direction
-# ---------------------------------------------------------------------------
 left, right = st.columns([3, 2])
 mag_pct = safety.magnitude_pct
 unc_pct = safety.uncertainty_pct
@@ -157,9 +169,9 @@ with left:
         st.success(safety.coverage_message)
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Magnitude", fmt_mag_pct(mag_pct))
-    m2.metric("In $", fmt_usd(mag_usd, spot) if spot else "—")
-    m3.metric("Uncertainty %", f"±{fmt_mag_pct(unc_pct)}")
-    m4.metric("Uncertainty $", fmt_usd(unc_usd, spot) if spot else "—")
+    m2.metric("In $", fmt_usd(mag_usd, spot) if spot else "\u2014")
+    m3.metric("Uncertainty %", f"\u00b1{fmt_mag_pct(unc_pct)}")
+    m4.metric("Uncertainty $", fmt_usd(unc_usd, spot) if spot else "\u2014")
     regime_str = safety.regime.upper() if safety.regime != "unknown" else "UNKNOWN"
     if safety.degraded and safety.regime != "unknown":
         regime_str += "*"
@@ -183,22 +195,21 @@ with right:
         st.caption(f"Spot vs strike: {direction.dist_to_strike_pct:+.3f}%")
     st.caption(direction.details)
 
-# Floors & ceilings
 st.markdown("#### Floors & Ceilings")
 fc1, fc2 = st.columns(2)
 with fc1:
     st.markdown("**Statistical band**")
     if stat_floor is not None and stat_ceil is not None:
-        st.write(f"Floor ≈ `{format_price(stat_floor)}`")
-        st.write(f"Ceiling ≈ `{format_price(stat_ceil)}`")
-        st.caption("anchor (strike or spot) ± (magnitude + uncertainty)")
+        st.write(f"Floor \u2248 `{format_price(stat_floor)}`")
+        st.write(f"Ceiling \u2248 `{format_price(stat_ceil)}`")
+        st.caption("anchor (strike or spot) \u00b1 (magnitude + uncertainty)")
     else:
-        st.write("—")
+        st.write("\u2014")
 with fc2:
     st.markdown("**Price-action levels**")
     if pa.get("window_low") is not None:
-        st.write(f"Window low  ≈ `{format_price(pa['window_low'])}`")
-        st.write(f"Window high ≈ `{format_price(pa['window_high'])}`")
+        st.write(f"Window low  \u2248 `{format_price(pa['window_low'])}`")
+        st.write(f"Window high \u2248 `{format_price(pa['window_high'])}`")
         if pa.get("prior_low") is not None:
             st.caption(
                 f"Prior 15m low `{format_price(pa['prior_low'])}` · "
@@ -208,18 +219,16 @@ with fc2:
         st.write("No short tape yet")
         st.caption("Needs a public 1-minute series")
 
-# After-fee strip
 st.markdown("#### After-fee strip (1 ticket, taker)")
 if market and yes_ask > 0:
     st.write(
-        f"Yes ask `{yes_ask:.3f}` + taker fee `{fee_yes:.4f}` + 1¢ buffer "
-        f"= need **P(up) ≥ {need_yes:.3f}** to even consider a YES call."
+        f"Yes ask `{yes_ask:.3f}` + taker fee `{fee_yes:.4f}` + 1\u00a2 buffer "
+        f"= need **P(up) \u2265 {need_yes:.3f}** to even consider a YES call."
     )
-    st.caption("Lopsided tape (90¢+) almost never clears this test. That is intentional.")
+    st.caption("Lopsided tape (90\u00a2+) almost never clears this test. That is intentional.")
 else:
     st.caption("No live ask to score.")
 
-# Outcome
 st.markdown("---")
 if gate.outcome == "UP":
     st.success(f"**UP** — {gate.reason}")
