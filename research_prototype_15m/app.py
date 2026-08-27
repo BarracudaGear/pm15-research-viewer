@@ -1,9 +1,4 @@
-"""
-Research Prototype – Kalshi 15-Minute Up/Down Dashboard
-
-Read-only. No trading. No keys. No paper button.
-Brain on screen: B1. Phase 2R overlays hidden.
-"""
+"""Kalshi 15-minute research dashboard. Read-only. Password gated."""
 from __future__ import annotations
 
 import time
@@ -27,11 +22,10 @@ from utils import (
     seconds_remaining_in_window,
 )
 
-st.set_page_config(page_title="Kalshi 15-Min Research", page_icon="\ud83d\udcca", layout="wide")
+st.set_page_config(page_title="Kalshi 15-Min Research", page_icon="P", layout="wide")
 
 
 def _gate() -> bool:
-    """Fail closed. No dashboard until APP_PASSWORD matches."""
     if st.session_state.get("authed"):
         return True
     try:
@@ -41,7 +35,7 @@ def _gate() -> bool:
     st.title("15-Min Research")
     st.caption("Private viewer.")
     if not expected:
-        st.error("APP_PASSWORD is not set in Streamlit secrets. Add it under App settings → Secrets.")
+        st.error("APP_PASSWORD is not set in Streamlit secrets.")
         return False
     pwd = st.text_input("Password", type="password")
     if pwd == str(expected):
@@ -56,7 +50,7 @@ if not _gate():
     st.stop()
 
 st.sidebar.title("15-Min Research")
-st.sidebar.caption("Read-only · Brain B1 · No keys · No paper")
+st.sidebar.caption("Read-only | Brain B1 | No keys | No paper")
 
 asset = st.sidebar.selectbox("Asset", ASSETS, index=0)
 which = st.sidebar.radio("Window", ["current", "next"], index=0, horizontal=True)
@@ -83,7 +77,7 @@ now = datetime.now(timezone.utc)
 secs_left = seconds_remaining_in_window(now)
 mins_left = minutes_remaining_in_window(now)
 
-with st.spinner("Fetching 15-minute ticket and spot\u2026"):
+with st.spinner("Fetching 15-minute ticket and spot..."):
     market = fetch_15m_market(asset, which)
     spot = fetch_spot(asset)
     recent_closes = fetch_recent_closes(asset, granularity=60, limit=30)
@@ -134,21 +128,18 @@ stat_floor = anchor - half if anchor else None
 stat_ceil = anchor + half if anchor else None
 
 book_tag = "Book A" if is_book_a(asset) else "Book B (quotes only)"
-st.title(f"{asset} · 15-Minute Up/Down")
-st.caption(
-    f"{book_tag} · Brain **B1** (midpoint + pictures) · "
-    "Phase 2R overlays hidden · Read-only research viewer"
-)
+st.title(f"{asset} | 15-Minute Up/Down")
+st.caption(f"{book_tag} | Brain B1 | Read-only research viewer")
 st.markdown(
-    f"**UTC now:** `{now.strftime('%Y-%m-%d %H:%M:%S')}` &nbsp;|&nbsp; "
+    f"**UTC now:** `{now.strftime('%Y-%m-%d %H:%M:%S')}` | "
     f"**Time left in current window:** `{format_mmss(secs_left)}`"
 )
 
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("Spot (public proxy)", format_price(spot) if spot else "\u2014")
-c2.metric("Price-to-beat", format_price(strike) if strike else "\u2014")
-c3.metric("Kalshi mid", f"{mid:.3f}" if market else "\u2014")
-c4.metric("Yes bid / ask", f"{yes_bid:.2f} / {yes_ask:.2f}" if market else "\u2014")
+c1.metric("Spot (public proxy)", format_price(spot) if spot else "-")
+c2.metric("Price-to-beat", format_price(strike) if strike else "-")
+c3.metric("Kalshi mid", f"{mid:.3f}" if market else "-")
+c4.metric("Yes bid / ask", f"{yes_bid:.2f} / {yes_ask:.2f}" if market else "-")
 
 if asset in COMMODITY_ASSETS and spot == 0.0:
     st.info("No public spot proxy for this metal/oil name. Using Kalshi tape only.")
@@ -164,20 +155,20 @@ unc_usd = spot * (unc_pct / 100.0) if spot else 0.0
 with left:
     st.subheader("Safety / Volatility")
     if safety.degraded:
-        st.warning(f"Degraded / partial — {safety.coverage_message}")
+        st.warning(f"Degraded / partial - {safety.coverage_message}")
     else:
         st.success(safety.coverage_message)
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Magnitude", fmt_mag_pct(mag_pct))
-    m2.metric("In $", fmt_usd(mag_usd, spot) if spot else "\u2014")
-    m3.metric("Uncertainty %", f"\u00b1{fmt_mag_pct(unc_pct)}")
-    m4.metric("Uncertainty $", fmt_usd(unc_usd, spot) if spot else "\u2014")
+    m2.metric("In $", fmt_usd(mag_usd, spot) if spot else "-")
+    m3.metric("Uncertainty %", f"+/-{fmt_mag_pct(unc_pct)}")
+    m4.metric("Uncertainty $", fmt_usd(unc_usd, spot) if spot else "-")
     regime_str = safety.regime.upper() if safety.regime != "unknown" else "UNKNOWN"
     if safety.degraded and safety.regime != "unknown":
         regime_str += "*"
     pct_str = f" (p{safety.regime_percentile:.0f})" if safety.regime_percentile is not None else ""
     st.caption(
-        f"Condition: `{safety.condition}`  ·  Regime: **{regime_str}**{pct_str}  ·  "
+        f"Condition: `{safety.condition}` | Regime: **{regime_str}**{pct_str} | "
         f"Gate: {'PASS' if safety.gate_pass else 'FAIL'}"
     )
     st.caption(safety.details)
@@ -189,30 +180,30 @@ with right:
     d2.metric("P(down)", f"{direction.p_down:.3f}")
     d3.metric("Kalshi mid", f"{direction.mid:.3f}")
     st.caption(
-        f"Picture: `{direction.picture}`  ·  Gate: {'PASS' if direction.gate_pass else 'FAIL'}"
+        f"Picture: `{direction.picture}` | Gate: {'PASS' if direction.gate_pass else 'FAIL'}"
     )
     if direction.dist_to_strike_pct is not None:
         st.caption(f"Spot vs strike: {direction.dist_to_strike_pct:+.3f}%")
     st.caption(direction.details)
 
-st.markdown("#### Floors & Ceilings")
+st.markdown("#### Floors and Ceilings")
 fc1, fc2 = st.columns(2)
 with fc1:
     st.markdown("**Statistical band**")
     if stat_floor is not None and stat_ceil is not None:
-        st.write(f"Floor \u2248 `{format_price(stat_floor)}`")
-        st.write(f"Ceiling \u2248 `{format_price(stat_ceil)}`")
-        st.caption("anchor (strike or spot) \u00b1 (magnitude + uncertainty)")
+        st.write(f"Floor ~ `{format_price(stat_floor)}`")
+        st.write(f"Ceiling ~ `{format_price(stat_ceil)}`")
+        st.caption("anchor (strike or spot) +/- (magnitude + uncertainty)")
     else:
-        st.write("\u2014")
+        st.write("-")
 with fc2:
     st.markdown("**Price-action levels**")
     if pa.get("window_low") is not None:
-        st.write(f"Window low  \u2248 `{format_price(pa['window_low'])}`")
-        st.write(f"Window high \u2248 `{format_price(pa['window_high'])}`")
+        st.write(f"Window low  ~ `{format_price(pa['window_low'])}`")
+        st.write(f"Window high ~ `{format_price(pa['window_high'])}`")
         if pa.get("prior_low") is not None:
             st.caption(
-                f"Prior 15m low `{format_price(pa['prior_low'])}` · "
+                f"Prior 15m low `{format_price(pa['prior_low'])}` | "
                 f"high `{format_price(pa['prior_high'])}`"
             )
     else:
@@ -222,35 +213,33 @@ with fc2:
 st.markdown("#### After-fee strip (1 ticket, taker)")
 if market and yes_ask > 0:
     st.write(
-        f"Yes ask `{yes_ask:.3f}` + taker fee `{fee_yes:.4f}` + 1\u00a2 buffer "
-        f"= need **P(up) \u2265 {need_yes:.3f}** to even consider a YES call."
+        f"Yes ask `{yes_ask:.3f}` + taker fee `{fee_yes:.4f}` + 1c buffer "
+        f"= need **P(up) >= {need_yes:.3f}** to even consider a YES call."
     )
-    st.caption("Lopsided tape (90\u00a2+) almost never clears this test. That is intentional.")
+    st.caption("Lopsided tape (90c+) almost never clears this test. That is intentional.")
 else:
     st.caption("No live ask to score.")
 
 st.markdown("---")
 if gate.outcome == "UP":
-    st.success(f"**UP** — {gate.reason}")
+    st.success(f"**UP** - {gate.reason}")
 elif gate.outcome == "DOWN":
-    st.success(f"**DOWN** — {gate.reason}")
+    st.success(f"**DOWN** - {gate.reason}")
 elif gate.outcome == "SIDEWAYS":
-    st.success(f"**SIDEWAYS** — {gate.reason}")
+    st.success(f"**SIDEWAYS** - {gate.reason}")
 else:
-    st.info(f"**NO CALL** — {gate.reason}")
+    st.info(f"**NO CALL** - {gate.reason}")
 
 if market:
     st.caption(
-        f"Ticker `{market.get('ticker')}` · event `{market.get('event_ticker')}` · "
-        f"close `{market.get('close_time')}` · official candles seen `{n_candles}`"
+        f"Ticker `{market.get('ticker')}` | event `{market.get('event_ticker')}` | "
+        f"close `{market.get('close_time')}` | official candles seen `{n_candles}`"
     )
 
 st.markdown("---")
 st.caption(
-    "Research prototype only. Coin settlement uses CF Benchmarks BRTI (60-second average); "
-    "gold/silver/WTI use named Pyth feeds. Public spot is a proxy, not the official print. "
-    "No trading, no keys, no paper journal writes. Regime labels ending in * use partial history. "
-    "Phase 2R CVD/funding overlays are present as hidden stubs and are not applied."
+    "Research prototype only. Public spot is a proxy, not the official print. "
+    "No trading, no keys, no paper journal writes."
 )
 
 if auto:
